@@ -4,6 +4,32 @@ import matplotlib.pyplot as plt
 import os
 
 def compress_fft_channel(channel, keep_fraction=0.1, save_spectrum=False, channel_name="", output_dir="spectra_output"):
+    """
+    Effettua compressione FFT su un singolo canale di una immagine. Ad ogni passaggio salva lo spettro delle frequenze.
+    
+    Parametri
+    ---------
+    channel : numpy.ndarray => Canale dell'immagine su cui applicare la compressione FFT.
+    keep_fraction : float => Fractione di frequenze centrali da mantenere.
+    save_spectrum : bool => Se True, salva lo spettro prima e dopo lo shift.
+    channel_name : str => Nome del canale per identificare le immagini di output.
+    output_dir : str => Percorso in cui salvare gli output spettrali.
+    
+    Funzionamento
+    -------------
+    - Applica fft2 al canale
+    - Applica shift per centrare le frequenze.
+    - Trova il centro dell'immagine e calcola il raggio per mantenere solo una frazione delle frequenze centrali.
+    - Mantiene solo le frequenze centrali.
+    - Applica shift inverso per riportare le frequenze al centro.
+    - Applica fftshift per riportare le frequenze al centro.
+    - Applica ifftshift e ifft2 per ottenere il canale compresso.
+    
+    Returns
+    -------
+    numpy.ndarray => Canale compresso.
+    
+    """
     fft = np.fft.fft2(channel)
     
     if save_spectrum:
@@ -16,7 +42,7 @@ def compress_fft_channel(channel, keep_fraction=0.1, save_spectrum=False, channe
     if save_spectrum:
         magnitude_before = np.log(np.abs(fft_shifted) + 1)
         os.makedirs(output_dir, exist_ok=True)
-        plt.imsave(f"{output_dir}/{channel_name}_after_shift.png", magnitude_before, cmap='gray')
+        plt.imsave(f"{output_dir}/{channel_name}_shifted.png", magnitude_before, cmap='gray')
 
     rows, cols = channel.shape
     crow, ccol = rows // 2, cols // 2
@@ -31,7 +57,7 @@ def compress_fft_channel(channel, keep_fraction=0.1, save_spectrum=False, channe
 
     if save_spectrum:
         magnitude_after = np.log(np.abs(fft_shifted_filtered) + 1)
-        plt.imsave(f"{output_dir}/{channel_name}_after_filter.png", magnitude_after, cmap='gray')
+        plt.imsave(f"{output_dir}/{channel_name}_filtered.png", magnitude_after, cmap='gray')
 
     fft_inverse = np.fft.ifft2(np.fft.ifftshift(fft_shifted_filtered))
     return np.abs(fft_inverse)
@@ -42,6 +68,33 @@ def get_file_size(path):
     return size_bytes, size_kb
 
 def compress_color_image_fft(image_path, keep_fraction=0.1, show=True, save_path="compressed_image.jpg", save_spectra=True):
+    """
+    Comprime una immagine utilizzando la compressione FFT su ciascun canale mantendendo una frazione delle frequenze.
+    
+    Parametri
+    ---------
+    image_path : str => Percorso dell'immagine da comprimare.
+    keep_fraction : float => Fractione di frequenze centrali da mantenere.
+    show : bool => Se True, mostra l'immagine originale e la versione compresso.
+    save_path : str => Percorso in cui salvare l'immagine compresso.
+    save_spectra : bool => Se True, salva gli spettri delle frequenze prima e dopo la compressione.
+    
+    Funzionamento
+    -------------
+    - Carica l'immagine e la porta in array.
+    - Comprime ciascun canale (Rosso, Verde, Blu) utilizzando la funzione compress_fft_channel.
+    - Combina i canali compressi in un'immagine.
+    - Salva l'immagine compressa.
+    - Compara le dimensioni dell'immagine originale e compressa.
+    
+    Return
+    ------
+    compressed_pil : PIL.Image.Image => Immagine compressa.
+    
+    """
+    
+    print(f"Comprimo l'immagine originale con keep_fraction={keep_fraction}")
+    
     img = Image.open(image_path).convert("RGB")
     img_np = np.array(img)
 
@@ -73,7 +126,6 @@ def compress_color_image_fft(image_path, keep_fraction=0.1, show=True, save_path
         plt.tight_layout()
         plt.show()
 
-    # Salva immagini su disco
     original_temp_path = "original_image_temp.jpg"
     img.save(original_temp_path)
     compressed_pil.save(save_path)
@@ -90,11 +142,10 @@ def compress_color_image_fft(image_path, keep_fraction=0.1, show=True, save_path
     return compressed_pil
 
 # === ESEMPIO DI USO ===
-keep_fraction = 0.05  # Tieni solo il 5% delle frequenze centrali
-print(f"Comprimo l'immagine originale con keep_fraction={keep_fraction}")
-compress_color_image_fft(
-    "original.jpg",
-    keep_fraction=keep_fraction,
-    save_path="compressed.jpg",
-    save_spectra=True  # Salva gli spettri
-)
+if __name__ == "__main__":
+    compress_color_image_fft(
+        image_path="original.jpg",
+        keep_fraction=0.5,
+        save_path="compressed.jpg",
+        save_spectra=True
+    )

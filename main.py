@@ -13,7 +13,7 @@ class ImageCompressor:
         self.input_dir = input_dir
         self.image_name = image_name
         self.image_path = f"{input_dir}/{image_name}"
-    def __compress_fft_channel(self, channel, keep_fraction=0.1, save_spectrum=False, channel_name="", output_dir="spectra_output"):
+    def __compress_fft_channel(self, channel, keep_fraction=0.1, filter="low-pass", save_spectrum=False, channel_name="", output_dir="spectra_output"):
         """
         Effettua compressione FFT su un singolo canale di una immagine. Ad ogni passaggio salva lo spettro delle frequenze.
         
@@ -61,7 +61,10 @@ class ImageCompressor:
         mask[crow - r_keep : crow + r_keep, ccol - c_keep : ccol + c_keep] = True
 
         fft_shifted_filtered = fft_shifted.copy()
-        fft_shifted_filtered[~mask] = 0
+        if filter == "low-pass": 
+            fft_shifted_filtered[~mask] = 0
+        else:
+            fft_shifted_filtered[mask] = 0
 
         if save_spectrum:
             magnitude_after = np.log(np.abs(fft_shifted_filtered) + 1)
@@ -70,13 +73,14 @@ class ImageCompressor:
         fft_inverse = np.fft.ifft2(np.fft.ifftshift(fft_shifted_filtered))
         return np.abs(fft_inverse)
 
-    def compress_color_image_fft(self, keep_fraction=0.1, show=True, save_name="compressed.jpg", save_spectra=True):
+    def compress_color_image_fft(self, keep_fraction=0.1, filter="low-pass", show=True, save_name="compressed.jpg", save_spectra=True):
         """
         Comprime una immagine utilizzando la compressione FFT su ciascun canale mantendendo una frazione delle frequenze.
         
         Parametri
         ---------
         keep_fraction : float => Frazione di frequenze centrali da mantenere.
+        filter : str => Tipo di filtro da applicare. "low-pass" o "high-pass".
         show : bool => Se True, mostra l'immagine originale e la versione compressa.
         save_name : str => Nome con cui salvare l'immagine compressa.
         save_spectra : bool => Se True, salva gli spettri delle frequenze prima e dopo la compressione.
@@ -108,9 +112,10 @@ class ImageCompressor:
             compressed = self.__compress_fft_channel(
                 channel=channel,
                 keep_fraction=keep_fraction,
+                filter=filter,
                 save_spectrum=save_spectra,
                 channel_name=channel_names[i],
-                output_dir=f"{self.input_dir}/spectra_output"
+                output_dir=f"{self.input_dir}/spectra_output_{filter}"
             )
             compressed = np.clip(compressed, 0, 255)
             compressed_channels.append(compressed.astype(np.uint8))
@@ -119,7 +124,7 @@ class ImageCompressor:
         compressed_pil = Image.fromarray(compressed_img)
 
         if show:
-            fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+            fig, axs = plt.subplots(1, 2, figsize=(12, 10))
             axs[0].imshow(img)
             axs[0].set_title("Originale")
             axs[0].axis("off")
@@ -149,6 +154,7 @@ if __name__ == "__main__":
     image_compressor = ImageCompressor(input_dir="Rubick", image_name="original.jpg")
     image_compressor.compress_color_image_fft(
         keep_fraction=0.1,
+        filter="low-pass",
         show=True,
         save_name="compressed.jpg",
         save_spectra=True
@@ -157,6 +163,7 @@ if __name__ == "__main__":
     image_compressor = ImageCompressor(input_dir="Bridge", image_name="original.jpg")
     image_compressor.compress_color_image_fft(
         keep_fraction=0.1,
+        filter="low-pass",
         show=True,
         save_name="compressed.jpg",
         save_spectra=True
@@ -164,7 +171,8 @@ if __name__ == "__main__":
     
     image_compressor = ImageCompressor(input_dir="Wolf", image_name="original.jpg")
     image_compressor.compress_color_image_fft(
-        keep_fraction=0.1,
+        keep_fraction=0.05,
+        filter="low-pass",
         show=True,
         save_name="compressed.jpg",
         save_spectra=True

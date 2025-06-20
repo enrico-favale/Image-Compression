@@ -151,7 +151,7 @@ class ImageCompressor:
 
         return compressed_pil
     
-    def __compress_wavelet_channel(self, channel, wavelet="haar", threshold=20, keep_ll_only=True, save_coeffs=False, channel_name="", output_dir="wavelet_coeffs"):
+    def __compress_wavelet_channel(self, channel, wavelet="haar", level=1, threshold=20, keep_ll_only=True, save_coeffs=False, channel_name="", output_dir="wavelet_coeffs"):
         """
         Comprime un singolo canale dell'immagine usando la trasformata wavelet discreta (DWT).
         
@@ -159,6 +159,7 @@ class ImageCompressor:
         ---------
         channel : numpy.ndarray => Canale dell'immagine da comprimere.
         wavelet : str => Tipo di wavelet da utilizzare (es. 'haar', 'db1', 'bior1.3'...).
+        level : int => Livello di decomposizione wavelet.
         threshold : float => Soglia per la riduzione dei coefficienti (soft thresholding).
         keep_ll_only : bool => Se True, mantiene solo la componente LL (approssimazione), azzerando i dettagli.
         save_coeffs : bool => Se True, salva un'immagine con la visualizzazione dei coefficienti wavelet.
@@ -177,62 +178,59 @@ class ImageCompressor:
         -------
         numpy.ndarray => Canale ricostruito e compresso.
         """
-        
-        coeffs = pywt.dwt2(channel, wavelet=wavelet)
-        
-        LL, (LH, HL, HH) = coeffs
-        
-        LL = pywt.threshold(LL, threshold, mode='soft')
 
-        if keep_ll_only:
-            LH *= 0
-            HL *= 0
-            HH *= 0
-        else:
-            LH = pywt.threshold(LH, threshold, mode='soft')
-            HL = pywt.threshold(HL, threshold, mode='soft')
-            HH = pywt.threshold(HH, threshold, mode='soft')
-            
-        coeffs_compressed = (LL, (LH, HL, HH))
-        
-        if save_coeffs:
-            # Plot all four components in a 2x2 grid
+        coeffs = pywt.wavedec2(channel, wavelet=wavelet, level=level)
+        coeffs_compressed = []
+
+        for i, coeff in enumerate(coeffs):
+            if i == 0:
+                LL = pywt.threshold(coeff, threshold, mode='soft')
+                coeffs_compressed.append(LL)
+            else:
+                LH, HL, HH = coeff
+                if keep_ll_only:
+                    coeffs_compressed.append((np.zeros_like(LH), np.zeros_like(HL), np.zeros_like(HH)))
+                else:
+                    LH = pywt.threshold(LH, threshold, mode='soft')
+                    HL = pywt.threshold(HL, threshold, mode='soft')
+                    HH = pywt.threshold(HH, threshold, mode='soft')
+                    coeffs_compressed.append((LH, HL, HH))
+
+        if save_coeffs and level == 1:
+            LL, (LH, HL, HH) = coeffs_compressed[0], coeffs_compressed[1]
+
             plt.figure(figsize=(10, 8))
             plt.suptitle(f'Wavelet Coefficients - {channel_name}')
 
             plt.subplot(2, 2, 1)
-            plt.imshow(LL)
-            plt.title('Approximation Coefficient (LL)')
+            plt.imshow(LL, cmap='gray')
+            plt.title('Approximation Coeff. (LL)')
             plt.axis('off')
 
             plt.subplot(2, 2, 2)
-            plt.imshow(LH)
+            plt.imshow(LH, cmap='gray')
             plt.title('Horizontal Detail (LH)')
             plt.axis('off')
 
             plt.subplot(2, 2, 3)
-            plt.imshow(HL)
+            plt.imshow(HL, cmap='gray')
             plt.title('Vertical Detail (HL)')
             plt.axis('off')
 
             plt.subplot(2, 2, 4)
-            plt.imshow(HH)
+            plt.imshow(HH, cmap='gray')
             plt.title('Diagonal Detail (HH)')
             plt.axis('off')
 
             plt.tight_layout()
-            
-            # Crea una directory per salvare le immagini, se non esiste
             os.makedirs(output_dir, exist_ok=True)
-
-            # Salva la figura
             plt.savefig(f"{output_dir}/wavelet_coefficients_{channel_name}.png", dpi=300)
-        
-        reconstructed = pywt.idwt2(coeffs_compressed, wavelet=wavelet)
-        
+
+        reconstructed = pywt.waverec2(coeffs_compressed, wavelet=wavelet)
         return np.clip(reconstructed, 0, 255)
+
         
-    def compress_color_image_dwt(self, wavelet="haar", threshold=20, keep_ll_only=True, show=True, save_name="compressed.jpg", save_coeffs=True):
+    def compress_color_image_dwt(self, wavelet="haar", level=1, threshold=20, keep_ll_only=True, show=True, save_name="compressed.jpg", save_coeffs=True):
         """
         Comprime un'immagine a colori usando la trasformata wavelet discreta (DWT) su ciascun canale RGB.
         
@@ -240,6 +238,7 @@ class ImageCompressor:
         ---------
         wavelet : str => Tipo di wavelet da utilizzare per la compressione.
         threshold : float => Soglia per la riduzione dei coefficienti.
+        level : int => Livello di decomposizione wavelet.
         keep_ll_only : bool => Se True, conserva solo la componente LL (approssimazione).
         show : bool => Se True, mostra il confronto tra immagine originale e compressa.
         save_name : str => Nome con cui salvare l'immagine compressa.
@@ -271,11 +270,12 @@ class ImageCompressor:
             compressed = self.__compress_wavelet_channel(
                 channel=channel,
                 wavelet=wavelet,
+                level=level,
                 threshold=threshold,
                 keep_ll_only=keep_ll_only,
                 save_coeffs=save_coeffs,
                 channel_name=channel_names[i],
-                output_dir=f"{self.input_dir}/wavelet_coeffs_{wavelet}"
+                output_dir=f"{self.input_dir}/wavelet_coeffs_{wavelet}_{level}_{threshold}"
             )
             compressed_channels.append(compressed.astype(np.uint8))
 
@@ -296,10 +296,10 @@ class ImageCompressor:
             
         original_temp_path = "original_image_temp.jpg"
         img.save(original_temp_path)
-        compressed_pil.save(f"{self.input_dir}/wavelet_{wavelet}_{save_name}")
+        compressed_pil.save(f"{self.input_dir}/wavelet_{wavelet}_{level}_{threshold}_{save_name}")
         
         original_size, original_kb = get_file_size(original_temp_path)
-        compressed_size, compressed_kb = get_file_size(f"{self.input_dir}/wavelet_{wavelet}_{save_name}")
+        compressed_size, compressed_kb = get_file_size(f"{self.input_dir}/wavelet_{wavelet}_{level}_{threshold}_{save_name}")
 
         print(f"\n📊 Dimensione immagini su disco:")
         print(f" - Originale: {original_size} bytes ({original_kb:.2f} KB)")

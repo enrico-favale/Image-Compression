@@ -41,17 +41,7 @@ class ImageCompressor:
         """
         fft = np.fft.fft2(channel)
         
-        if save_spectrum:
-            magnitude_before = np.log(np.abs(fft) + 1)
-            os.makedirs(output_dir, exist_ok=True)
-            plt.imsave(f"{output_dir}/{channel_name}_before_shift.png", magnitude_before, cmap='gray')
-        
         fft_shifted = np.fft.fftshift(fft)
-
-        if save_spectrum:
-            magnitude_before = np.log(np.abs(fft_shifted) + 1)
-            os.makedirs(output_dir, exist_ok=True)
-            plt.imsave(f"{output_dir}/{channel_name}_shifted.png", magnitude_before, cmap='gray')
 
         rows, cols = channel.shape
         crow, ccol = rows // 2, cols // 2
@@ -66,12 +56,31 @@ class ImageCompressor:
             fft_shifted_filtered[~mask] = 0
         else:
             fft_shifted_filtered[mask] = 0
-
+            
+        fft_reshifted = np.fft.ifftshift(fft_shifted_filtered)
+        fft_inverse = np.fft.ifft2(fft_reshifted)
+        
         if save_spectrum:
-            magnitude_after = np.log(np.abs(fft_shifted_filtered) + 1)
-            plt.imsave(f"{output_dir}/{channel_name}_filtered.png", magnitude_after, cmap='gray')
+            magnitude_before = np.log(np.abs(fft) + 1)
+            os.makedirs(output_dir, exist_ok=True)
+            plt.imsave(f"{output_dir}/{channel_name}_01_before_shift.png", magnitude_before, cmap='gray')
 
-        fft_inverse = np.fft.ifft2(np.fft.ifftshift(fft_shifted_filtered))
+            magnitude_before = np.log(np.abs(fft_shifted) + 1)
+            plt.imsave(f"{output_dir}/{channel_name}_02_shifted.png", magnitude_before, cmap='gray')
+
+            magnitude_after = np.log(np.abs(fft_shifted_filtered) + 1)
+            plt.imsave(f"{output_dir}/{channel_name}_03_filtered.png", magnitude_after, cmap='gray')
+
+            magnitude_after = np.log(np.abs(fft_reshifted) + 1)
+            plt.imsave(f"{output_dir}/{channel_name}_04_reshifted.png", magnitude_after, cmap='gray')
+
+            reconstructed_channel = np.abs(fft_inverse)
+
+            reconstructed_channel -= reconstructed_channel.min()
+            reconstructed_channel /= reconstructed_channel.max()
+
+            plt.imsave(f"{output_dir}/{channel_name}_05_inversed.png", reconstructed_channel, cmap='gray')
+        
         return np.abs(fft_inverse)
 
     def compress_color_image_fft(self, keep_fraction=0.1, filter="low-pass", show=True, save_name="compressed.jpg", save_spectra=True):

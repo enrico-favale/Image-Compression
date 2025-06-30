@@ -238,7 +238,6 @@ class ImageCompressor:
         reconstructed = pywt.waverec2(coeffs_compressed, wavelet=wavelet)
         return np.clip(reconstructed, 0, 255)
 
-        
     def compress_color_image_dwt(self, wavelet="haar", level=1, threshold=20, keep_ll_only=True, show=True, save_name="compressed.jpg", save_coeffs=True):
         """
         Comprime un'immagine a colori usando la trasformata wavelet discreta (DWT) su ciascun canale RGB.
